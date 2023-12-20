@@ -5,7 +5,7 @@ use poem::{
     get, handler,
     listener::TcpListener,
     middleware::Tracing,
-    web::{Data, Path, Query},
+    web::{Data, Query},
     EndpointExt, Route, Server,
 };
 
@@ -22,9 +22,13 @@ struct QueryParams {
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
+    /// Cached geo-index for faster load time
+    #[arg(short, long, env)]
+    cache: Option<String>,
+
     /// Path to pbf file
     #[arg(short, long, env)]
-    path: String,
+    pbf: String,
 }
 
 mod geo;
@@ -46,8 +50,34 @@ async fn main() -> Result<(), std::io::Error> {
     }
     tracing_subscriber::fmt::init();
 
-    let mut geo = GeoIndex::new();
-    geo.load(&args.path);
+    let geo = match args.cache {
+        Some(path) => {
+            //check if file path exists
+            match std::fs::File::open(&path) {
+                Ok(file) => {
+                    let start = std::time::Instant::now();
+                    println!("load index from file");
+                    let geo: GeoIndex = bincode::deserialize_from(file).unwrap();
+                    println!("Loaded index in {}ms", start.elapsed().as_millis());
+                    geo
+                }
+                Err(_e) => {
+                    println!("cannot load index => rebuild");
+                    let mut geo = GeoIndex::new();
+                    geo.build(&args.pbf);
+                    // save geo to file
+                    std::fs::write(&path, bincode::serialize(&geo).unwrap())
+                        .expect("Unable to write file");
+                    geo
+                }
+            }
+        }
+        None => {
+            let mut geo = GeoIndex::new();
+            geo.build(&args.pbf);
+            geo
+        }
+    };
 
     let app = Route::new()
         .at("/query", get(query))

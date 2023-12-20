@@ -1,21 +1,27 @@
-use std::{collections::HashMap, sync::Arc, time::Instant};
+use std::{collections::HashMap, time::Instant};
 
 use osmpbfreader::OsmObj;
 use rstar::{
     primitives::{GeomWithData, Line},
     RTree,
 };
+use serde::{Deserialize, Serialize};
 
+#[derive(Serialize, Deserialize)]
 pub struct GeoIndex {
-    tree: RTree<GeomWithData<Line<[f32; 2]>, Arc<String>>>,
+    tree: RTree<GeomWithData<Line<[f32; 2]>, i64>>,
+    ways: HashMap<i64, String>,
 }
 
 impl GeoIndex {
     pub fn new() -> GeoIndex {
-        GeoIndex { tree: RTree::new() }
+        GeoIndex {
+            tree: RTree::new(),
+            ways: HashMap::new(),
+        }
     }
 
-    pub fn load(&mut self, path: &str) {
+    pub fn build(&mut self, path: &str) {
         let start = Instant::now();
         let mut pbf = osmpbfreader::OsmPbfReader::new(std::fs::File::open(path).unwrap());
         println!("Loaded pbf in {}ms", start.elapsed().as_millis());
@@ -26,6 +32,8 @@ impl GeoIndex {
         let mut lines_count = 0;
 
         let tree = &mut self.tree;
+        let ways = &mut self.ways;
+
         for obj in pbf.iter() {
             match obj {
                 Ok(OsmObj::Node(node)) => {
@@ -55,15 +63,15 @@ impl GeoIndex {
                     } else {
                         continue;
                     };
+                    ways.insert(way.id.0, name);
 
-                    let way_data = Arc::new(name);
                     let mut start_point = None;
                     for node in &way.nodes {
                         if let Some(node_point) = nodes.get(&(node.0)) {
                             if let Some(start_point) = &start_point {
                                 let line = Line::new(*start_point, *node_point);
                                 lines_count += 1;
-                                tree.insert(GeomWithData::new(line, way_data.clone()));
+                                tree.insert(GeomWithData::new(line, way.id.0));
                             } else {
                                 start_point = Some(*node_point);
                             }
@@ -83,9 +91,11 @@ impl GeoIndex {
         );
     }
 
-    pub fn find(&self, lat: f32, lon: f32) -> Option<Arc<String>> {
-        self.tree
+    pub fn find(&self, lat: f32, lon: f32) -> Option<String> {
+        let way_id = self
+            .tree
             .nearest_neighbor(&[lat, lon])
-            .map(|res| res.data.clone())
+            .map(|res| res.data)?;
+        self.ways.get(&way_id).map(|name| name.clone())
     }
 }
