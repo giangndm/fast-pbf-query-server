@@ -11,7 +11,7 @@ RUN case $TARGETPLATFORM in \
         "linux/arm64")  BUILD=aarch64-unknown-linux-gnu  ;; \
         *) exit 1 ;; \
     esac; \
-    mv /tmp/$BUILD/agent-$BUILD /fast-pbf-server; \
+    mv /tmp/$BUILD/fast-pbf-server-$BUILD /fast-pbf-server; \
     chmod +x /fast-pbf-server;
 
 FROM ubuntu:22.04
