@@ -5,7 +5,7 @@ use poem::{
     get, handler,
     listener::TcpListener,
     middleware::Tracing,
-    web::{Data, Query},
+    web::{Data, Json, Query},
     EndpointExt, Route, Server,
 };
 
@@ -33,12 +33,37 @@ struct Args {
 
 mod geo;
 
+#[derive(serde::Serialize)]
+struct Response<T> {
+    success: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    data: Option<T>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+}
+
+#[derive(serde::Serialize)]
+struct AddressResponse {
+    address: String,
+}
+
 #[handler]
-fn query(data: Data<&Arc<GeoIndex>>, Query(query): Query<QueryParams>) -> String {
+fn query(
+    data: Data<&Arc<GeoIndex>>,
+    Query(query): Query<QueryParams>,
+) -> Json<Response<AddressResponse>> {
     if let Some(address) = data.0.find(query.lat, query.lon) {
-        format!("Address: {}", address)
+        Json(Response {
+            success: true,
+            data: Some(AddressResponse { address }),
+            error: None,
+        })
     } else {
-        "Not found".to_string()
+        Json(Response {
+            success: false,
+            data: None,
+            error: Some("No address found".to_string()),
+        })
     }
 }
 
@@ -84,7 +109,7 @@ async fn main() -> Result<(), std::io::Error> {
         .data(Arc::new(geo))
         .with(Tracing);
     Server::new(TcpListener::bind("0.0.0.0:3000"))
-        .name("hello-world")
+        .name("Fast-pbf-server")
         .run(app)
         .await
 }
