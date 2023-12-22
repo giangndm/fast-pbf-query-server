@@ -10,6 +10,18 @@ Our primary motivation was to create a reverse geocoding server that could handl
 
 Our approach to achieving this high performance was to cache everything in-memory, rather than relying on a database. This resulted in a significant performance increase, with our server able to handle over 70,000 requests per second on a MacBook M1 Pro machine, while only using around 100MB of memory.
 
+```console
+❯ wrk http://localhost:3000/query\?lat\=21.022894363180978\&lon\=105.80110064069345
+Running 10s test @ http://localhost:3000/query?lat=21.022894363180978&lon=105.80110064069345
+  2 threads and 10 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   154.91us  233.58us  10.15ms   97.01%
+    Req/Sec    35.61k     2.78k   38.49k    92.57%
+  715604 requests in 10.10s, 121.48MB read
+Requests/sec:  70853.45
+Transfer/sec:     12.03MB
+```
+
 To further optimize memory usage, we stripped down the data from 64-bit floating point numbers (f64) to 32-bit floating point numbers (f32). This is because f32 provides sufficient accuracy for GPS latitude and longitude coordinates, and it uses less memory. 
 
 ## Current State
